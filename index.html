@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Выбор директории с файлами CSV</title>
+</head>
+<body>
+    <h1>Выберите директорию с файлами CSV</h1>
+    <form action="process.php" method="POST" enctype="multipart/form-data">
+        <label for="directory">Выберите директорию:</label>
+        <input type="file" id="directory" name="files[]" webkitdirectory multiple>
+        <br><br>
+        <button type="submit">Обработать</button>
+    </form>
+</body>
+</html>
