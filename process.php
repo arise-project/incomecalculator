@@ -185,6 +185,7 @@ function mergeReportAndStatement($bankData, $zReportData) {
         $zReportEntry = $formattedZReportData[$date] ?? null;
         $zSumCash = $zReportEntry['cash'] ?? null;
         $zSumNonCashShifted = $shiftedNonCash[$date] ?? null;
+        $zRetSum = $zReportEntry['retSum'] ?? null;
 
         // Добавляем данные
         $mergedData[] = [
@@ -192,6 +193,7 @@ function mergeReportAndStatement($bankData, $zReportData) {
             'zSumNonCash' => $zSumNonCashShifted,
             'bankSum' => $bankSum,
             'zSumCash' => $zSumCash,
+            'zRetSum'=> $zRetSum,
         ];
     }
 
@@ -224,17 +226,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['files'])) {
                     $date = $row['date'];
                     $cash = $row['cash'];
                     $nonCash = $row['nonCash'];
+                    $retSum = $row['retSum'];
 
                     if (!isset($accumulatedData[$date])) {
                         $accumulatedData[$date] = [
                             'date' => $date,
                             'cash' => 0,
                             'nonCash' => 0,
+                            'retSum' =>0,
                         ];
                     }
 
                     $accumulatedData[$date]['cash'] += $cash;
                     $accumulatedData[$date]['nonCash'] += $nonCash;
+                    $accumulatedData[$date]['retSum'] += $retSum;
                 }
             } catch (Exception $e) {
                 echo "<p style='color: red;'>Ошибка обработки файла $originalName: " . $e->getMessage() . "</p>";
@@ -324,21 +329,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['files'])) {
 
     <?php
 
-    foreach ($mergedData as &$entry) {
-
+/*    foreach ($mergedData as $index => &$entry) {
         $bankValue = isset($entry['bankSum']) ? $entry['bankSum'] : 0;
         $znoCashValue = isset($entry['zSumNonCash']) ? $entry['zSumNonCash'] : 0;
-
-        // Добавляем столбец разницы
+    
+        // Рассчитываем разницу
         $entry['difference'] = round($bankValue - $znoCashValue, 2);
+    
+        // Обновляем zCashCorrection в текущей и предыдущей строках
+        if ($index > 0) { // Если это не первая строка
+            $mergedData[$index - 1]['zCashCorrection'] = round($mergedData[$index - 1]['zSumCash'] - $entry['difference'], 2);
+        }
+    
+        // Для последней строки zCashCorrection = 0
+        if ($index === count($mergedData) - 1) {
+            $entry['zCashCorrection'] = 0;
+        }
+        if ($index > 0)
+            $entry[$index - 1]['Result'] = $entry[$index - 1]['bankSum'] + $entry[$index - 1]['zCashCorrection'] - $entry[$index - 1]['zRetSum'];
+        }
+    }*/
 
-        if ($entry['difference'] > 0){
-            $entry['zCashCorrection'] = $entry['zSumCash'] - $entry['difference'];
-        } else if ($entry['difference'] < 0){ 
-            $entry['zCashCorrection'] = $entry['zSumCash'] + $entry['difference'];
-        } else {
-            $entry['zCashCorrection'] = $entry['zSumCash'];    
-        }    
+    foreach ($mergedData as $index => &$entry) {
+        $bankValue = isset($entry['bankSum']) ? $entry['bankSum'] : 0;
+        $znoCashValue = isset($entry['zSumNonCash']) ? $entry['zSumNonCash'] : 0;
+    
+        // Рассчитываем разницу
+        $entry['difference'] = round($bankValue - $znoCashValue, 2);
+    
+        // Обновляем zCashCorrection в текущей и предыдущей строках
+        if ($index > 0) { // Если это не первая строка
+            $mergedData[$index - 1]['zCashCorrection'] = round($mergedData[$index - 1]['zSumCash'] - $entry['difference'], 2);
+    
+            // Рассчитываем Result для предыдущей строки
+            $mergedData[$index - 1]['Result'] = round(
+                $mergedData[$index - 1]['bankSum'] + $mergedData[$index - 1]['zCashCorrection'] - $mergedData[$index - 1]['zRetSum'], 
+                2
+            );
+        }
+    
+        // Для последней строки zCashCorrection = 0
+        if ($index === count($mergedData) - 1) {
+            $entry['zCashCorrection'] = 0;
+    
+            // Рассчитываем Result для последней строки
+            $entry['Result'] = round($bankValue + $entry['zCashCorrection'] - (isset($entry['zRetSum']) ? $entry['zRetSum'] : 0), 2);
+        }
     }
 
     file_put_contents(__DIR__ . '/mergedData.json', json_encode($mergedData));
@@ -353,38 +389,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['files'])) {
     <title>Данные</title>
 </head>
 <body>
-    <h1>Объединённые данные</h1>
-    <?php if (!empty($mergedData)): ?>
-        <table border="1" cellpadding="5" cellspacing="0">
-            <thead>
-                <tr>
-                    <th>Дата</th>
-                    <th>Безналичные Z</th>
-                    <th>Сумма банка</th>
-                    <th>Наличные Z</th>
-                    <th>Разница Банк - Z</th>
-                    <th>Z - нал коррекция</th>
+<h1>Объединённые данные</h1>
+<?php if (!empty($mergedData)): ?>
+    <table border="1" cellpadding="5" cellspacing="0">
+        <thead>
+            <tr>
+                <th>Дата</th>
+                <th>Безналичные Z</th>
+                <th>Сумма банка</th>
+                <th>Наличные Z</th>
+                <th>Разница Банк - Z</th>
+                <th>Z - нал коррекция</th>
+                <th>Z - return></th>
+                <th>Result</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($mergedData as $row): ?>
+                <tr style="<?= $row['difference'] != 0 ? 'color: red;' : '' ?>">
+                    <td><?= htmlspecialchars($row['date']) ?></td>
+                    <td><?= htmlspecialchars(str_replace('.', ',', $row['zSumNonCash'])) ?></td>
+                    <td><?= htmlspecialchars(str_replace('.', ',', $row['bankSum'])) ?></td>
+                    <td><?= htmlspecialchars(str_replace('.', ',', $row['zSumCash'])) ?></td>
+                    <td><?= htmlspecialchars(str_replace('.', ',', $row['difference'])) ?></td>
+                    <td><?= htmlspecialchars(str_replace('.', ',', $row['zCashCorrection'])) ?></td>
+                    <td><?= htmlspecialchars(str_replace('.', ',', $row['zRetSum'])) ?></td>
+                    <td><?= htmlspecialchars(str_replace('.', ',', $row['Result'])) ?></td>
                 </tr>
-            </thead>
-            <tbody>            
-                <?php foreach ($mergedData as $row): ?>                    
-                    <tr style="<?= $row['difference'] != 0 ? 'color: red;' : '' ?>">
-                        <td><?= htmlspecialchars($row['date']) ?></td>
-                        <td><?= htmlspecialchars($row['zSumNonCash']) ?></td>
-                        <td><?= htmlspecialchars($row['bankSum']) ?></td>
-                        <td><?= htmlspecialchars($row['zSumCash']) ?></td>
-                        <td><?= htmlspecialchars($row['difference']) ?></td>
-                        <td><?= htmlspecialchars($row['zCashCorrection']) ?></td>
-                    </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-        <br>
-        <form action="download.php" method="post">
-            <button type="submit">Скачать файл</button>
-        </form>
-    <?php else: ?>
-        <p>Нет данных для отображения.</p>
-    <?php endif; ?>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+    <br>
+    <form action="download.php" method="post">
+        <button type="submit">Скачать файл</button>
+    </form>
+<?php else: ?>
+    <p>Нет данных для отображения.</p>
+<?php endif; ?>
 </body>
 </html>

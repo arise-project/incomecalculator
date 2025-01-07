@@ -20,6 +20,7 @@ class ZReportReader {
             $dateIndex = array_search('OrderDateTime', $headers);
             $cashIndex = array_search('RlzSumCash', $headers);
             $nonCashIndex = array_search('RlzSumNonCash', $headers);
+            $retSumIndex = array_search('RetSum', $headers);
 
             /*
             print_r($headers);
@@ -37,12 +38,14 @@ class ZReportReader {
                 $date = isset($row[$dateIndex]) ? explode(' ', $row[$dateIndex])[0] : null;
                 $cash = isset($row[$cashIndex]) ? floatval(str_replace(' ', '', $row[$cashIndex])) : 0.0;
                 $nonCash = isset($row[$nonCashIndex]) ? floatval(str_replace(' ', '', $row[$nonCashIndex])) : 0.0;
+                $retSum = isset($row[$retSumIndex]) ? floatval(str_replace(' ', '', $row[$retSumIndex])) :0.0;
 
                 if ($date) {
                     $this->rows[] = [
                         'date' => $date,
                         'cash' => $cash,
                         'nonCash' => $nonCash,
+                        'retSum' => $retSum,
                     ];
                 }
             }
